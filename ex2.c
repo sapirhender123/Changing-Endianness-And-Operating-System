@@ -1,4 +1,4 @@
-// 208414573 Sapir Hender
+//208414573 Sapir Hender
 #include <stdio.h>
 #include <string.h>
 
@@ -8,11 +8,11 @@ void main(int argc, char *argv[]) {
         // if there is no argument
         if (argv[1] == NULL) {
             return;
-        }
-        else {
+        } else {
             // parse the arguments
-            char* sourceFile = argv[1];
-            char* destFile = argv[2];
+            char *sourceFile = argv[1];
+            char *destFile = argv[2];
+
             FILE *ptrSrc;
             // if there is no such a file
             if (sourceFile != NULL) {
@@ -57,69 +57,40 @@ void main(int argc, char *argv[]) {
         FILE *ptrDest;
         ptrDest = fopen(destFile, "wb");
         // create a buffer
-        if (srcWinFlag) {
+        if (srcWinFlag) { // win - > mac / unix
             unsigned int buffer;
             // define lineBreak for each operation system
             unsigned int lineBreakWin = 0x000d000a;
             unsigned int lineBreakMac = 0x000d;
             unsigned int lineBreakUnix = 0x000a;
-
             while (fread(&buffer, sizeof(buffer), 1, ptrSrc) != 0) {
                 // in case of src == window
-                    if (buffer == lineBreakWin) {
-                        if (destMacFlag) {
-                            buffer = 0x000d0000;
-                        } else { // unix = dest
-                            buffer = 0x000a0000;
-                        }
+                if (buffer == lineBreakWin) {
+                    if (destMacFlag) {
+                        buffer = lineBreakMac;
+                    } else { // unix = dest
+                        buffer = lineBreakUnix;
                     }
                 }
                 fwrite(&buffer, sizeof(buffer), 1, ptrDest);
-        } else {
+            }
+        } else { // unix / mac -> windows or unix - > mac or mac - > unix
             signed short int buffer;
+            unsigned int lineBreakWin;
             unsigned int lineBreakMac = 0x000d;
             unsigned int lineBreakUnix = 0x000a;
             while (fread(&buffer, sizeof(buffer), 1, ptrSrc) != 0) {
                 // in case of src == window
-                if (srcMacFlag) {
+                if ((srcMacFlag || srcUnixFlag) && (destWinFlag)) {
                     if (buffer == lineBreakMac) {
-                    // unix = dest
-                            buffer = 0x000a0000;
-                        }
+                        fwrite(&lineBreakWin, sizeof(lineBreakWin), 1, ptrDest);
                     }
+                } else if (srcMacFlag && destUnixFlag) {
+                    fwrite(&lineBreakUnix, sizeof(lineBreakUnix), 1, ptrDest);
+                } else if (srcUnixFlag && destMacFlag) {
+                    fwrite(&lineBreakMac, sizeof(lineBreakMac), 1, ptrDest);
                 }
-                fwrite(&buffer, sizeof(buffer), 1, ptrDest);
             }
-
         }
-    }
-//    else if (srcMacFlag) {
-//                    if (destUnixFlag) {
-//
-//
-//                // in case src == mac
-//                // in case src == unix
-//
-//                if (buffer == lineBreakWin) {
-//                    buffer = destUnixFlag ? 0x000a0000 : 00000000;
-//                    buffer = destUnixFlag ? 0x000a0000 : 00000000;
-//
-//                    if (destUnixFlag == 1) {
-//                        buffer = 0x000a0000;
-//                    } else { // in win - > mac case
-//                        buffer = 0x000d0000;
-//                    }
-//                }
-//                fwrite(&buffer, sizeof(buffer), 1, ptrDest);
-//            }
-//        } else if (strcmp(argv[4], "-mac") == 0) { // in the case of win -> mac
-//
-//            }
-//        }
-
-
-
-
-            }
     }
 }
