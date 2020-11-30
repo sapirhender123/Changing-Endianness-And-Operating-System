@@ -2,33 +2,34 @@
 #include <stdio.h>
 #include <string.h>
 
-void main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
     //todo special cases
 
+    if (argc < 3)
+        return 1;
+
     // 1. if we are in case 1, we get a source file name and a destination file name, we just have to copy the source
+
     if (argc == 3) {
-        // if there is no argument
-        if (argv[1] == NULL) {
-            return;
-        } else {
-            // parse the arguments
-            char *sourceFile = argv[1];
-            char *destFile = argv[2];
+        // parse the arguments
+        char *sourceFile = argv[1];
+        char *destFile = argv[2];
 
-            FILE *ptrSrc;
-            // open the source file
-            ptrSrc = fopen(sourceFile, "rb");
+        FILE *ptrSrc;
+        // open the source file
+        ptrSrc = fopen(sourceFile, "rb");
 
-            // create a destination file
-            FILE *ptrDest;
-            ptrDest = fopen(destFile, "wb");
-            // create a buffer
-            char buffer[1024];
-            while (fread(buffer, sizeof(buffer), 1, ptrSrc) != 0) {
-                // copy the content from the source file to the destination file
-                fwrite(buffer, sizeof(buffer), 1, ptrDest);
-            }
+        // create a destination file
+        FILE *ptrDest;
+        ptrDest = fopen(destFile, "wb");
+        // create a buffer
+        char buffer[1024];
+        while (fread(buffer, sizeof(buffer), 1, ptrSrc) != 0) {
+            // copy the content from the source file to the destination file
+            fwrite(buffer, sizeof(buffer), 1, ptrDest);
         }
+        fclose(ptrSrc);
+        fclose(ptrDest);
     }
     if ((argc == 5) || argc == 4) { // case number 2 or 3
         // now, there are two cases. The first can be endianness flag, and the second can be an operating system flag
@@ -36,56 +37,107 @@ void main(int argc, char *argv[]) {
         int srcWinFlag = !strcmp(argv[3], "-win");
         int srcMacFlag = !strcmp(argv[3], "-mac");
         int srcUnixFlag = !strcmp(argv[3], "-unix");
+        if (!srcWinFlag && !srcMacFlag && !srcUnixFlag) return 1;
+
         int destWinFlag = !strcmp(argv[4], "-win");
         int destMacFlag = !strcmp(argv[4], "-mac");
         int destUnixFlag = !strcmp(argv[4], "-unix");
-        //const unsigned int lineBreakWin = 0x000d000a;
-        const unsigned int lineBreakMac = 0x000d;
-        const unsigned int lineBreakUnix = 0x000a;
-        char lineBreakWin[2] = "\r\n";
+        if (!destWinFlag && !destMacFlag && !destUnixFlag) return 1;
+
+        int swapFlag = !strcmp(argv[5], "-swap") || 0 != strcmp(argv[5], "-keep");
+
+        const char CR[2] = "\0\r";  // mac
+        const char LF[2] = "\0\n";  // unix
+
         //parse arguments
         char *sourceFile = argv[1];
         char *destFile = argv[2];
         FILE *ptrSrc;
         ptrSrc = fopen(sourceFile, "rb");
+        if (NULL == ptrSrc) {
+            // Invalid file
+            return 1;
+        }
+
         // create a destination file
         FILE *ptrDest;
         ptrDest = fopen(destFile, "wb");
-        // create a buffer
+
+        //If the 16-bit file represented in big-endian byte order, the BOM will appear as 0xFE 0xFF
+        //If the 16-bit file use little-endian order, the BOM will appear as 0xFF 0xFE
+        char BOM_buffer[2];
+        const char bigBOM[2] = "\xFE\xFF";
+        int isBigEndian = 0;
+        fread(&BOM_buffer, sizeof(BOM_buffer), 1, ptrSrc);
+        if ((BOM_buffer[0] == bigBOM[0]) && (BOM_buffer[1] == bigBOM[1])) {
+            isBigEndian = 1;
+        }
+        int indx = isBigEndian; //
+        if (swapFlag) {
+            indx = !isBigEndian;
+        }
+
         if (srcWinFlag) { // win - > mac / unix
             // reading 2 chars in UTF-16
             char buffer[2];
             // define lineBreak for each operation system
             while (fread(&buffer, sizeof(buffer), 1, ptrSrc) != 0) {
                 // in case of src == window
-                if (*buffer == lineBreakMac) {
-                    if (destMacFlag) {
-                        buffer = lineBreakMac;
-                    } else { // unix = dest
-                        buffer = lineBreakUnix;
+                // if it is little endian
+                if ((buffer[isBigEndian] == CR[isBigEndian] && buffer[!isBigEndian] == CR[!isBigEndian])) {
+                    fread(&buffer, sizeof(buffer), 1, ptrSrc);
+                    if (buffer[isBigEndian] == LF[isBigEndian] && buffer[!isBigEndian] == LF[!isBigEndian]) {
+                        if (destUnixFlag) {
+                            fwrite(&LF[!indx], 1, 1, ptrDest);
+                            fwrite(&LF[indx], 1, 1, ptrDest);
+                        } else if (destMacFlag) {
+                            fwrite(&CR[!indx], 1, 1, ptrDest);
+                            fwrite(&CR[indx], 1, 1, ptrDest);
+                        }
+                    } else {
+                        fwrite(&CR[!indx], 1, 1, ptrDest);
+                        fwrite(&CR[indx], 1, 1, ptrDest);
+                        goto write;
                     }
+                } else {
+                    write:
+                    fwrite(&buffer[!indx], 1, 1, ptrDest);
+                    fwrite(&buffer[indx], 1, 1, ptrDest);
                 }
-                fwrite(&buffer, sizeof(buffer), 1, ptrDest);
             }
         } else { // unix / mac -> windows or unix - > mac or mac - > unix
             char buffer[2];
             while (fread(&buffer, sizeof(buffer), 1, ptrSrc) != 0) {
-                // in case of src == window
+                // in case of dst == window
+                // unix / mac - > window
                 if ((srcMacFlag || srcUnixFlag) && (destWinFlag)) {
-                    if (!strcmp(buffer,lineBreakMac) == 0) {
-                        fwrite(&lineBreakWin, sizeof(lineBreakWin), 1, ptrDest);
+                    if ((buffer[0] == CR[0] && buffer[1] == CR[1]) || (buffer[0] == LF[0] &&
+                                                                       buffer[1] == LF[1])) {
+                        fwrite(&CR[!indx], 1, 1, ptrDest);
+                        fwrite(&CR[indx], 1, 1, ptrDest);
+                        fwrite(&LF[!indx], 1, 1, ptrDest);
+                        fwrite(&LF[indx], 1, 1, ptrDest);
+                    } else { // if it is not an break line char
+                        fwrite(&buffer[!indx], 1, 1, ptrDest);
+                        fwrite(&buffer[indx], 1, 1, ptrDest);
                     }
-                } else if (srcMacFlag && destUnixFlag) {
-                    fwrite(&lineBreakUnix, sizeof(lineBreakUnix), 1, ptrDest);
-                } else if (srcUnixFlag && destMacFlag) {
-                    fwrite(&lineBreakMac, sizeof(lineBreakMac), 1, ptrDest);
+                } else if ((srcMacFlag && destUnixFlag) &&
+                           ((buffer[0] = CR[0]) && (buffer[1] == CR[1]))) { // mac -> unix
+                    fwrite(&LF[!indx], 1, 1, ptrDest);
+                    fwrite(&LF[indx], 1, 1, ptrDest);
+                } else if ((srcUnixFlag && destMacFlag) && ((buffer[0] == LF[0])) &&
+                           ((buffer[1] == LF[1]))) { // unix - > mac
+                    fwrite(&CR[!indx], 1, 1, ptrDest);
+                    fwrite(&CR[indx], 1, 1, ptrDest);
+                } else { // If it is not a break line char
+                    fwrite(&buffer[!indx], 1, 1, ptrDest);
+                    fwrite(&buffer[indx], 1, 1, ptrDest);
                 }
             }
         }
+        fclose(ptrSrc);
+        fclose(ptrDest);
     }
-    if (argc == 5) {
 
-
-    }
 }
 
