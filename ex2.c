@@ -47,18 +47,21 @@ int main(int argc, char *argv[]) {
         int destUnixFlag = !strcmp(argv[4], "-unix");
         if (!destWinFlag && !destMacFlag && !destUnixFlag) return 1;
 
+        // check if there a swap / keep flag, and update his flay accordingly
         int swapFlag = 0;
-        if (argc == 6)
+        if (argc == 6) {
             swapFlag = !strcmp(argv[5], "-swap") || 0 != strcmp(argv[5], "-keep");
-
+        }
+        // reference break line in mac and unix
         const char CR[2] = "\0\r";  // mac
         const char LF[2] = "\0\n";  // unix
 
-        //parse arguments
+        // parse arguments
         char *sourceFile = argv[1];
         char *destFile = argv[2];
         FILE *ptrSrc;
         ptrSrc = fopen(sourceFile, "rb");
+        // if the source file doesn't exist
         if (NULL == ptrSrc) {
             // Invalid file
             return 1;
@@ -68,49 +71,55 @@ int main(int argc, char *argv[]) {
         FILE *ptrDest;
         ptrDest = fopen(destFile, "wb");
 
-        //If the 16-bit file represented in big-endian byte order, the BOM will appear as 0xFE 0xFF
-        //If the 16-bit file use little-endian order, the BOM will appear as 0xFF 0xFE
+        // If the 16-bit file represented in big-endian byte order, the BOM will appear as 0xFE 0xFF
+        // If the 16-bit file use little-endian order, the BOM will appear as 0xFF 0xFE
         char BOM_buffer[2];
         const char bigBOM[2] = "\xFE\xFF";
         int isBigEndian = 0;
+        // reading the first 2 bytes in order to understand if the file is in little or big endian
         fread(&BOM_buffer, sizeof(BOM_buffer), 1, ptrSrc);
         if ((BOM_buffer[0] == bigBOM[0]) && (BOM_buffer[1] == bigBOM[1])) {
             isBigEndian = 1;
         }
+        // indx that will be in use in the program in order to write in the file in big endian or little, accordingly
         int indx = isBigEndian; //
         if (swapFlag) {
+            // if there is swap flag, the indx will be the opposite of what it was, in order to change the order of the write of files
             indx = !isBigEndian;
         }
-
+        // writing the BOM in the beginning of the file
         fwrite(&bigBOM[!indx], 1, 1, ptrDest);
         fwrite(&bigBOM[indx], 1, 1, ptrDest);
 
+        // if it is window to mac or to unix
         if (srcWinFlag) { // win - > mac / unix
             // reading 2 chars in UTF-16
             char buffer[2];
             // define lineBreak for each operation system
             while (fread(&buffer, sizeof(buffer), 1, ptrSrc) != 0) {
-                // in case of src == window
-                // if it is little endian
+                // in case of the source file is in window
                 if ((buffer[isBigEndian] == CR[isBigEndian] && buffer[!isBigEndian] == CR[!isBigEndian])) {
+                    // if the first byte is the same like windows, continue reading
                     fread(&buffer, sizeof(buffer), 1, ptrSrc);
                     if (buffer[isBigEndian] == LF[isBigEndian] && buffer[!isBigEndian] == LF[!isBigEndian]) {
+                        // found a line break
                         if (destUnixFlag) {
-                            fwrite(&LF[!indx], 1, 1, ptrDest);
                             fwrite(&LF[indx], 1, 1, ptrDest);
+                            fwrite(&LF[!indx], 1, 1, ptrDest);
                         } else if (destMacFlag) {
-                            fwrite(&CR[!indx], 1, 1, ptrDest);
                             fwrite(&CR[indx], 1, 1, ptrDest);
+                            fwrite(&CR[!indx], 1, 1, ptrDest);
                         }
-                    } else {
-                        fwrite(&CR[!indx], 1, 1, ptrDest);
+                        // todo check of writing the first byte
+                    } else { // if just one part of line break of window is the same
                         fwrite(&CR[indx], 1, 1, ptrDest);
+                        fwrite(&CR[!indx], 1, 1, ptrDest);
                         goto write;
                     }
-                } else {
+                } else { // writing the rest of the file
                     write:
-                    fwrite(&buffer[!indx], 1, 1, ptrDest);
                     fwrite(&buffer[indx], 1, 1, ptrDest);
+                    fwrite(&buffer[!indx], 1, 1, ptrDest);
                 }
             }
         } else { // unix / mac -> windows or unix - > mac or mac - > unix
@@ -121,11 +130,12 @@ int main(int argc, char *argv[]) {
                 if ((srcMacFlag || srcUnixFlag) && (destWinFlag)) {
                     if ((buffer[0] == CR[0] && buffer[1] == CR[1]) || (buffer[0] == LF[0] &&
                                                                        buffer[1] == LF[1])) {
+                        // if there is a line break of unix or mac, write accordingly
                         fwrite(&CR[indx], 1, 1, ptrDest);
                         fwrite(&CR[!indx], 1, 1, ptrDest);
                         fwrite(&LF[indx], 1, 1, ptrDest);
                         fwrite(&LF[!indx], 1, 1, ptrDest);
-                    } else { // if it is not an break line char
+                    } else { // if it is not an break line char, writing the rest
                         fwrite(&buffer[indx], 1, 1, ptrDest);
                         fwrite(&buffer[!indx], 1, 1, ptrDest);
                     }
@@ -143,6 +153,7 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
+        // close the files
         fclose(ptrSrc);
         fclose(ptrDest);
     }
