@@ -5,7 +5,7 @@
 int main(int argc, char *argv[]) {
     //todo special cases
 
-    if (argc < 3)
+    if (argc < 3 || argc == 4)
         return 1;
 
     // 1. if we are in case 1, we get a source file name and a destination file name, we just have to copy the source
@@ -18,20 +18,23 @@ int main(int argc, char *argv[]) {
         FILE *ptrSrc;
         // open the source file
         ptrSrc = fopen(sourceFile, "rb");
+        if (ptrSrc == NULL) {
+            return 1;
+        }
 
         // create a destination file
         FILE *ptrDest;
         ptrDest = fopen(destFile, "wb");
         // create a buffer
-        char buffer[1024];
-        while (fread(buffer, sizeof(buffer), 1, ptrSrc) != 0) {
+        char buffer[1];
+        while (fread(buffer, 1, sizeof(buffer), ptrSrc) != 0) {
             // copy the content from the source file to the destination file
             fwrite(buffer, sizeof(buffer), 1, ptrDest);
         }
         fclose(ptrSrc);
         fclose(ptrDest);
     }
-    if ((argc == 5) || argc == 4) { // case number 2 or 3
+    if ((argc == 6) || argc == 5) { // case number 2 or 3
         // now, there are two cases. The first can be endianness flag, and the second can be an operating system flag
         // case 1 - change of operating system and a linebreak.
         int srcWinFlag = !strcmp(argv[3], "-win");
@@ -44,7 +47,9 @@ int main(int argc, char *argv[]) {
         int destUnixFlag = !strcmp(argv[4], "-unix");
         if (!destWinFlag && !destMacFlag && !destUnixFlag) return 1;
 
-        int swapFlag = !strcmp(argv[5], "-swap") || 0 != strcmp(argv[5], "-keep");
+        int swapFlag = 0;
+        if (argc == 6)
+            swapFlag = !strcmp(argv[5], "-swap") || 0 != strcmp(argv[5], "-keep");
 
         const char CR[2] = "\0\r";  // mac
         const char LF[2] = "\0\n";  // unix
@@ -76,6 +81,9 @@ int main(int argc, char *argv[]) {
         if (swapFlag) {
             indx = !isBigEndian;
         }
+
+        fwrite(&bigBOM[!indx], 1, 1, ptrDest);
+        fwrite(&bigBOM[indx], 1, 1, ptrDest);
 
         if (srcWinFlag) { // win - > mac / unix
             // reading 2 chars in UTF-16
@@ -113,25 +121,25 @@ int main(int argc, char *argv[]) {
                 if ((srcMacFlag || srcUnixFlag) && (destWinFlag)) {
                     if ((buffer[0] == CR[0] && buffer[1] == CR[1]) || (buffer[0] == LF[0] &&
                                                                        buffer[1] == LF[1])) {
-                        fwrite(&CR[!indx], 1, 1, ptrDest);
                         fwrite(&CR[indx], 1, 1, ptrDest);
-                        fwrite(&LF[!indx], 1, 1, ptrDest);
+                        fwrite(&CR[!indx], 1, 1, ptrDest);
                         fwrite(&LF[indx], 1, 1, ptrDest);
+                        fwrite(&LF[!indx], 1, 1, ptrDest);
                     } else { // if it is not an break line char
-                        fwrite(&buffer[!indx], 1, 1, ptrDest);
                         fwrite(&buffer[indx], 1, 1, ptrDest);
+                        fwrite(&buffer[!indx], 1, 1, ptrDest);
                     }
                 } else if ((srcMacFlag && destUnixFlag) &&
                            ((buffer[0] = CR[0]) && (buffer[1] == CR[1]))) { // mac -> unix
-                    fwrite(&LF[!indx], 1, 1, ptrDest);
                     fwrite(&LF[indx], 1, 1, ptrDest);
+                    fwrite(&LF[!indx], 1, 1, ptrDest);
                 } else if ((srcUnixFlag && destMacFlag) && ((buffer[0] == LF[0])) &&
                            ((buffer[1] == LF[1]))) { // unix - > mac
-                    fwrite(&CR[!indx], 1, 1, ptrDest);
                     fwrite(&CR[indx], 1, 1, ptrDest);
+                    fwrite(&CR[!indx], 1, 1, ptrDest);
                 } else { // If it is not a break line char
-                    fwrite(&buffer[!indx], 1, 1, ptrDest);
                     fwrite(&buffer[indx], 1, 1, ptrDest);
+                    fwrite(&buffer[!indx], 1, 1, ptrDest);
                 }
             }
         }
