@@ -53,8 +53,8 @@ int main(int argc, char *argv[]) {
             swapFlag = !strcmp(argv[5], "-swap") || 0 != strcmp(argv[5], "-keep");
         }
         // reference break line in mac and unix
-        const char CR[2] = "\0\r";  // mac
-        const char LF[2] = "\0\n";  // unix
+        const char CR[2] = {'\r','\0'};  // mac
+        const char LF[2] = {'\n','\0'};  // unix
 
         // parse arguments
         char *sourceFile = argv[1];
@@ -74,7 +74,9 @@ int main(int argc, char *argv[]) {
         // If the 16-bit file represented in big-endian byte order, the BOM will appear as 0xFE 0xFF
         // If the 16-bit file use little-endian order, the BOM will appear as 0xFF 0xFE
         char BOM_buffer[2];
-        const char bigBOM[2] = "\xFE\xFF";
+        const char bigBOM[2] = {'fe', 'ff'};
+                //{'FE', 'FF'};
+        //"\xFE\xFF";
         int isBigEndian = 0;
         // reading the first 2 bytes in order to understand if the file is in little or big endian
         fread(&BOM_buffer, sizeof(BOM_buffer), 1, ptrSrc);
@@ -82,7 +84,7 @@ int main(int argc, char *argv[]) {
             isBigEndian = 1;
         }
         // indx that will be in use in the program in order to write in the file in big endian or little, accordingly
-        int indx = isBigEndian; //
+        int indx = isBigEndian;
         if (swapFlag) {
             // if there is swap flag, the indx will be the opposite of what it was, in order to change the order of the write of files
             indx = !isBigEndian;
@@ -124,7 +126,7 @@ int main(int argc, char *argv[]) {
             }
         } else { // unix / mac -> windows or unix - > mac or mac - > unix
             char buffer[2];
-            while (fread(&buffer, sizeof(buffer), 1, ptrSrc) != 0) {
+            while (fread(&buffer, 2, 1, ptrSrc) != 0) {
                 // in case of dst == window
                 // unix / mac - > window
                 if ((srcMacFlag || srcUnixFlag) && (destWinFlag)) {
@@ -140,7 +142,7 @@ int main(int argc, char *argv[]) {
                         fwrite(&buffer[!indx], 1, 1, ptrDest);
                     }
                 } else if ((srcMacFlag && destUnixFlag) &&
-                           ((buffer[0] = CR[0]) && (buffer[1] == CR[1]))) { // mac -> unix
+                           ((buffer[0] == CR[0]) && (buffer[1] == CR[1]))) { // mac -> unix
                     fwrite(&LF[indx], 1, 1, ptrDest);
                     fwrite(&LF[!indx], 1, 1, ptrDest);
                 } else if ((srcUnixFlag && destMacFlag) && ((buffer[0] == LF[0])) &&
