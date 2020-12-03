@@ -3,6 +3,20 @@
 #include <string.h>
 #include <errno.h>
 
+void writeCRLF(const char *CR, const char *LF, int indx,  FILE *ptrDest)
+{
+    if (CR != NULL) {
+        fwrite(&CR[!indx], 1, 1, ptrDest);
+        fwrite(&CR[indx], 1, 1, ptrDest);
+    }
+
+    if (LF != NULL) {
+        fwrite(&LF[!indx], 1, 1, ptrDest);
+        fwrite(&LF[indx], 1, 1, ptrDest);
+    }
+}
+
+
 int main(int argc, char *argv[]) {
     //todo special cases
 
@@ -127,11 +141,13 @@ int main(int argc, char *argv[]) {
                         if (buffer[indx] == LF[indx] && buffer[!indx] == LF[!indx]) {
                             // found a line break
                             if (destUnixFlag) {
-                                fwrite(&LF[!indx], 1, 1, ptrDest);
-                                fwrite(&LF[indx], 1, 1, ptrDest);
+                                writeCRLF(NULL, LF, indx, ptrDest);
+//                                fwrite(&LF[!indx], 1, 1, ptrDest);
+//                                fwrite(&LF[indx], 1, 1, ptrDest);
                             } else if (destMacFlag) {
-                                fwrite(&CR[!indx], 1, 1, ptrDest);
-                                fwrite(&CR[indx], 1, 1, ptrDest);
+                                writeCRLF(CR, NULL, indx, ptrDest);
+//                                fwrite(&CR[!indx], 1, 1, ptrDest);
+//                                fwrite(&CR[indx], 1, 1, ptrDest);
                             }
                             // todo check of writing the first byte
                         } else { // if just one part of line break of window is the same
@@ -154,16 +170,23 @@ int main(int argc, char *argv[]) {
                 // in case of dst == window
                 // unix / mac - > window
                 if ((srcMacFlag || srcUnixFlag) && (destWinFlag)) {
-                    if ((buffer[indx] == CR[indx] && buffer[!indx] == CR[!indx]) || (buffer[indx] == LF[indx] &&
-                                                                                     buffer[!indx] == LF[!indx])) {
+                    if ((srcMacFlag) && (buffer[indx] == CR[indx] && buffer[!indx] == CR[!indx])) { // mac - > win
                         // if there is a line break of unix or mac, write accordingly
                         fwrite(&CR[!indx], 1, 1, ptrDest);
                         fwrite(&CR[indx], 1, 1, ptrDest);
                         fwrite(&LF[!indx], 1, 1, ptrDest);
                         fwrite(&LF[indx], 1, 1, ptrDest);
+                    } else if ((srcUnixFlag) && (buffer[indx] == LF[indx] &&
+                                                                buffer[!indx] == LF[!indx])) { // unix - > win
+                        fwrite(&CR[!indx], 1, 1, ptrDest);
+                        fwrite(&CR[indx], 1, 1, ptrDest);
+                        fwrite(&LF[!indx], 1, 1, ptrDest);
+                        fwrite(&LF[indx], 1, 1, ptrDest);
+
                     } else { // if it is not an break line char, writing the rest
                         fwrite(&buffer[!indx], 1, 1, ptrDest);
                         fwrite(&buffer[indx], 1, 1, ptrDest);
+
                     }
                 } else if ((srcMacFlag && destUnixFlag) &&
                            ((buffer[indx] == CR[indx]) && (buffer[!indx] == CR[!indx]))) { // mac -> unix
@@ -179,7 +202,8 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
-        // close the files
+
+// close the files
         fclose(ptrSrc);
         fclose(ptrDest);
     }
