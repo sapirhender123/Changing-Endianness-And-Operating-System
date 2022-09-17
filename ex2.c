@@ -1,4 +1,4 @@
-//208414573 Sapir Hender
+
 #include <stdio.h>
 #include <string.h>
 
